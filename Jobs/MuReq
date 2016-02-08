@@ -1,0 +1,228 @@
+@@	Coded by: Gizmo AKA Ourea, Alzie, Oukranos
+@@	Email: ccubed.techno@gmail.com
+@@----------------------------------------------------------------------------
+@@	Purpose: Mu2 Job System, Integrates with Database. Assumes MySQL based syntax
+@@----------------------------------------------------------------------------
+@@
+@@   DATABASE:
+@@       Tables:
+@@           JOBS_LIST
+@@           JOBS_COMMENTS
+@@           JOBS_TAGS
+@@       Makeup:
+@@           JOBS_LIST:
+@@               ID
+@@               OPENED_ON
+@@               OPENED_BY
+@@               ASSIGNED
+@@               TITLE
+@@               BODY
+@@               DUE
+@@               CATEGORY
+@@               FLAGS
+@@               READERS
+@@               COMMENTERS
+@@
+@@           JOBS_TAGS:
+@@               JOB_ID
+@@               TAG
+@@
+@@           JOBS_COMMENTS:
+@@               ID
+@@               JOB_ID
+@@               POSTED_BY
+@@               POSTED_ON
+@@               FLAGS
+@@               READERS
+@@               BODY
+@@
+@@   Flags: 0 - none, 1 - global, 2 - held, 3 - closed, 4 - archived, 5 - staff, 6 - Staff Locked
+
+@create MuReq
+
+@@ Command: +jobs. Purpose: Display list of jobs.
+&CMD`JOBS MuReq=$+jobs:@switch [orflags(%#,Wr)]=1,{@pemit %#=[u(FN`JOBS_LIST_STAFF_OVERVIEW,%#)]},{@pemit %#=[u(FN`JOBS_LIST_PLAYER_OVERVIEW,%#)]}
+
+@@ Command: +jobs/category <category>. Purpose: Display list of jobs in <category>.
+&CMD`JOBS_CATEGORY MuReq=$+jobs/category *:@switch [setq(A,[sql(u(SQL`SELECT_BY_CATEGORY,%0),|,~)])][orflags(%#,Wr)]=0,{@pemit %#=[u(FN`JOBS_LIST,[filterbool(FILTERS`JOB_ACCESS,%qA,|,|)])]},1,{@pemit %#=[u(FN`JOBS_LIST,%qA)]}
+
+@@ Command: +jobs/tag <tag>. Purpose: Display list of jobs with <tag>.
+&CMD`JOBS_TAG MuReq=$+jobs/tag *:@switch [setq(a,[sql(u(SQL`SELECT_BY_TAG,%0),|,~)])][orflags(%#,Wr)]=0,{@pemit %#=[u(FN`JOBS_LIST,[filterbool(FILTERS`JOB_ACCESS,%qA,|,|)])]},1,{@pemit %#=[u(FN`JOBS_LIST,%qA)]}
+
+@@ Command: +jobs/from <name>. Purpose: Display jobs opened by <name>.
+&CMD`JOBS_FROM MuReq=$+jobs/from *:@assert [pmatch(%0)]=@pemit %#=[ansi(hr,Jobs:)]%bNo match for that player.;@break [orflags(%#,Wr)]={@pemit %#=[u(FN`JOBS_LIST,[sql(u(SQL`SELECT_BY_OPENED_BY,trim(pmatch(%0),#)),|,~)],Jobs from [name(pmatch(%0))])]}
+
+@@ Command: +jobs/mine. Purpose: A player version of +jobs/from.
+&CMD`JOBS_MINE MuReq=$+jobs/mine:@pemit %#=[u(FN`JOBS_LIST,[sql(u(SQL`SELECT_BY_OPENED_BY,trim(%#,#)),|,~)],My Jobs)]
+
+@@ Command: +jobs/search <keyword>. Purpose: Perform fulltext search of job titles and contents for <keyword>.
+&CMD`JOBS_KEYWORD_SEARCH MuReq=$+jobs/search *:@assert [orflags(%#,Wr)];@pemit %#=[u(FN`JOBS_LIST,[sql(u(SQL`SELECT_BY_KEYWORD,%0),|,~)])]
+
+@@ Command: +job <id>. Purpose: Display job <id>.
+&CMD`JOB MuReq=$+job *:@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@assert [u(FN`CAN_VIEW,%#,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bNo permission to view job.;[setq(A,[sql(SELECT * FROM JOBS_LIST WHERE ID=[sqlescape(%0)],|,~)])][setq(B,[sql(SELECT * FROM JOBS_COMMENTS WHERE JOB_ID=[sqlescape(%0)],|,~)])];@pemit %#=[header(Job %0)]%R[center([ansi(hw,Opened On)]%b[extract(%qA,2,1,~)]%b[ansi(hw,By)]%b[setr(c,[name(#[extract(%qA,3,1,~)])])],78)]%R[center(%qC's%b[ansi(hw,request for)]%b[extract(%qA,5,1,~)],78)]%R%b[ansi(nc,repeat(-,76))]%R[ansi(hw,Opening Comments)]:%R[extract(%qA,6,1,~)];@dolist/inline/delimit | [if(orflags(%#,Wr),%qB,[filterbool(FILTERS`CAN_VIEW_COMMENTS,%qB,|,|)])]=@pemit %#=%b[repeat(ansi(nc,-),76)]%R\[[extract(%i0,1,1,~)][if(eq(extract(%i0,5,1,~),5),-[ansi(nr,Staff)])]\]%b[ansi(hw,Posted On)]%b[extract(%i0,4,1,~)]%b[ansi(hw,By)]%b[name(#[extract(%i0,3,1,~)])]:%R[extract(%i0,7,1,~)];@pemit %#=[footer()]
+
+@@ Command: +job/comment <id>=<text>. Purpose: Add comment to job <id> with text of <text>
+&CMD`JOB_COMMENT MuReq=$+job/comment *=*:@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@assert [u(FN`CAN_WRITE,%#,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bNo permission to write to job.;@pemit %#=[u(FN`INSERT_COMMENT,%0,trim(%#,#),0,%1)]
+
+@@ Command: +job/add <id>=<text>. Purpose: Add a comment to job <id> with text of <text> with the staff flag.
+&CMD`JOB_STAFF_COMMENT MuReq=$+job/add *=*:@assert [orflags(%#,Wr)];@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@pemit %#=[u(FN`INSERT_COMMENT,%0,trim(%#,#),5,%1)]
+
+@@ Command: +request <title>[/<category>]=<text>. Purpose: create a new job with <title> and body of <text>. If <category> is specified it will be placed in that <category>.
+&CMD`JOB_REQUEST MuReq=$+request *=*:@switch [words(%0,/)]=1,{[sql(u(SQL`CREATE_JOB,[timefmt($Y-$m-$d $H:$M:$S)],trim(%#,#),%0,%1))]},2,{[sql(u(SQL`CREATE_JOB_EX,[timefmt($Y-$m-$d $H:$M:$S)],trim(%#,#),before(%0,/),%1,after(%0,/),0))]}
+
+@@ Command: +job/readers <id>[/<comment ID>]=<player>. Purpose: Add <player> to the readers of job <id>. if <comment ID> is specified it is applied to that comment ID in the job instead.
+&CMD`JOB_READERS MuReq=$+job/readers *=*:@assert [u(FN`EXISTS,[before(%0,/)])]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@assert [u(FN`CAN_CONTROL,%#,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bYou don't control that job.;@assert [pmatch(%1)]=@pemit %#=[ansi(hw,JOBS:)]%bWho?;@switch [words(%0,/)]=1,{[sql(u(SQL`UPDATE_READERS,%0,pmatch(%1)))];@pemit %#=[ansi(hw,JOBS:)]%bUpdated Readers on Job %0.},{@assert [sql(u(SQL`COMMENT_PART_OF_JOB,[before(%0,/)],[after(%0,/)]))]=@pemit %#=[ansi(hw,Jobs:)]%bThat comment isn't in that job.;[sql(u(SQL`UPDATE_COMMENT_READERS,[after(%0,/)],pmatch(%1)))];@pemit %#=[ansi(hw,JOBS:)]%bUpdated Readers on Comment [after(%0,/)] in Job [before(%0,/)].}
+
+@@ Command: +job/commenters <id>=<player>. Purpose: Add <players> to the commenters of job <id>.
+&CMD`JOB_COMMENTERS MuReq=$+job/commenters *=*:@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@assert [u(FN`CAN_CONTROL,%#,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bYou don't control that job.;@assert [pmatch(%1)]=@pemit %#=[ansi(hw,JOBS:)]%bWho?;[sql(u(SQL`UPDATE_COMMENTORS,%0,pmatch(%1)))];@pemit %#=[ansi(hw,JOBS:)]%bUpdated Readers on Job %0.
+
+@@ Command: +job/create <title>[/<category>[/<flag>]]=<text>. Purpose: Alias for +request. Staff version can specify a flag.
+&CMD`JOB_ADD MuReq=$+job/create *=*:@assert [orflags(%#,Wr)];@switch [words(%0,/)]=1,{[sql(u(SQL`CREATE_JOB,[timefmt($Y-$m-$d $H:$M:$S)],trim(%#,#),%0,%1))]},2,{[sql(u(SQL`CREATE_JOB_EX,[timefmt($Y-$m-$d $H:$M:$S)],trim(%#,#),before(%0,/),%1,after(%0,/),0))]},3,{[sql(u(SQL`CREATE_JOB_EX,[timefmt($Y-$m-$d $H:$M:$S)],trim(%#,#),extract(%0,1,1,/),%1,extract(%0,2,1,/),extract(%0,3,1,/)))]}
+
+@@ Command: +job/tag <id>=<tag>. Purpose: Modify <tags> on job <id>.
+&CMD`JOB_TAG MuReq=$+job/tag *=*:@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@assert [u(FN`CAN_CONTROL,%#,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bYou don't control that job.;[sql(u(SQL`CREATE_TAG,%0,%1))];@pemit %#=[ansi(hw,JOBS:)]%bUpdated job %0 with a new tag: %1.
+
+@@ Command: +job/category <id>=<Category>. Purpose: Set the <category> of job <id>. Jobs can have one category but many tags. Think of categories as buckets or branches of issues.
+@@ Example: Bugs, Code, Plots, Apps, Staff, Global, etc.
+&CMD`JOB_CATEGORY MuReq=$+job/category *=*:@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;@assert [u(FN`CAN_CONTROL,%#,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bYou don't control that job.;[sql(UPDATE JOBS_LIST SET CATEGORY='[sqlescape(%1)]' WHERE ID='[sqlescape(%0)]')];@pemit %#=[ansi(hw,JOBS:)]%bUpdated job %0 to have a category of %1.
+
+@@ Command: +job/lock <id>. Purpose: Lock job <id>. This means that only staff can edit the flags, category, tags, commenters and readers. Commenters and Readers can still read/comment.
+&CMD`JOB_LOCK MuReq=$+job/lock *:@assert [orflags(%#,Wr)];@assert [u(FN`EXISTS,%0)]=@pemit %#=[ansi(hw,JOBS:)]%bID %0 doesn't seem to exist.;[sql(UPDATE JOBS_LIST SET FLAGS=6 WHERE ID=[sqlescape(%0)])];@pemit %#=[ansi(hw,JOBS:)]%bLocked job %0.
+
+@@   Functions List:
+@@       FN`EXISTS - Check for the ID in the DB
+@@           Returns: 1 if it exists in the DB, 0 otherwise
+@@
+@@       FN`CAN_CONTROL - Check if the given dbref can control a job
+@@           Purpose: If they can control the job, they can add commentors and readers and edit tags and categories.
+@@           Passed: %0 - DBRef, %1 - Job ID
+@@           Definition of CAN_CONTROL: (Admin AND (Flag=0 OR Flag=2)) OR Staff
+@@           Returns: 1 if they do, 0 if not
+@@
+@@       FN`CAN_WRITE - Check if the given dbref can write to a job
+@@           Purpose: if they can write to the job, they can comment on it
+@@           Passed: %0 - DBRef, %1 - Job ID
+@@           Definition of CAN_WRITE: ((Admin OR Commentor) AND Flag<2) OR Staff
+@@           Returns: 1 if they can, 0 if not
+@@
+@@       FN`CAN_VIEW - Check if the given dbref can view a job
+@@           Purpose: If they can view a job, they can read it
+@@           Passed: %0 - DBRef, %1 - Job ID
+@@           Definition of CAN_VIEW: ((Admin OR Commentor OR Reader) AND Flag<5) OR Staff
+@@
+@@       FN`JOBS_LIST_STAFF_OVERVIEW - Staff version of +jobs Overview
+@@           Purpose: list jobs, staff version
+@@           Passed: nothing
+@@
+@@       FN`JOBS_LIST_PLAYER_OVERVIEW - Player version of +jobs Overview
+@@           Purpose: list jobs, player version
+@@           Passed: nothing
+@@
+@@       FN`JOBS_LIST - List some jobs
+@@           Purpose: list some jobs
+@@           Passed: %0 - List of Jobs
+
+&FN`EXISTS MuReq=[sql(u(SQL`ID_EXISTS,%0))]
+
+&FN`CAN_CONTROL MuReq=[cor(orflags(%0,Wr),sql(u(SQL`CHECK_CONTROL,trim(%0,#),%1)))]
+
+&FN`CAN_WRITE MuReq=[cor(orflags(%0,Wr),sql(u(SQL`CAN_WRITE,%0,%1)))]
+
+&FN`CAN_VIEW MuReq=[cor(orflags(%0,Wr),sql(u(SQL`CAN_VIEW,%0,%1)))]
+
+&FN`JOBS_LIST_STAFF_OVERVIEW MuReq=[setq(A,[sql(u(SQL`COUNT_BY_CATEGORY),|,~)])][setq(B,[sql(u(SQL`COUNT_BY_TAG),|,~)])][header(MuReq)]%R[center([ansi(hw,Categories)],78)]%R[iter(%qA,[ljust([ansi(nc,extract(%i0,2,1,~))],39)][ljust(extract(%i0,1,1,~),39)],|,%R)]%R[center([ansi(hw,Tags)],78)]%R[iter(%qB,[ljust([ansi(nc,extract(%i0,2,1,~))],39)][ljust(extract(%i0,1,1,~),39)],|,%R)][footer()]
+
+&FN`JOBS_LIST_PLAYER_OVERVIEW MuReq=[setq(A,[sql(u(SQL`COUNT_BY_CATEGORY_PLAYER,%0),|,~)])][setq(B,[sql(u(SQL`COUNT_BY_TAG_PLAYER,%0),|,~)])][header(MuReq)]%R[center([ansi(hw,Categories)],78)]%R[iter(%qA,[ljust([ansi(nc,extract(%i0,2,1,~))],39)][ljust(extract(%i0,1,1,~),39)],|,%R)]%R[center([ansi(hw,Tags)],78)]%R[iter(%qB,[ljust([ansi(nc,extract(%i0,2,1,~))],39)][ljust(extract(%i0,1,1,~),39)],|,%R)][footer()]
+
+&FN`JOBS_LIST MuReq=[header(%1)][ljust(ID,5)][ljust(TITLE,20)][ljust(CATEGORY,20)][ljust(ASSIGNED,20)][ljust(FLAG,13)]%R%b[repeat(-,76)]%R[iter(%0,[ansi([u(FN`DECIDE_COLOR,extract(%i0,7,1,~))],[ljust(extract(%i0,1,1,~),5)][ljust(extract(%i0,5,1,~),20)][ljust(extract(%i0,8,1,~),20)][ljust(extract(%i0,4,1,~),20)][ljust(u(FN`OUTPUT_FLAG,extract(%i0,9,1,~)),13)])],|,%R)][footer()]
+
+&FN`DECIDE_COLOR MuReq=[switch(sub(secs(),convtime(%0)),>259200,hg,<259200,hy,hw)]
+
+&FN`OUTPUT_FLAG MuReq=[switch(%0,0,None,1,Global,2,Held,3,Closed,4,Archived,5,Staff,6,Staff Locked,None)]
+
+&FN`INSERT_COMMENT MuReq=[sql(u(SQL`INSERT_COMMENT,%0,%1,[timefmt($Y-$m-$d $H:$M:$S)],%2,%3))][ansi(hw,JOBS:)]%bCommented on job %0.
+
+@@  SQL Statements List:
+@@    NOTE: If you're hacking this, MySQL is inane and fulltext searches require the columns to be exactly as you entered them when creating
+@@    the fulltext index. IE: Commentors,Readers will work. Commentors will work. Readers will work. Readers,Commentors will fail unless you Modify
+@@    the create table statement.
+@@
+@@    SQL`COUNT_BY_CATEGORY_PLAYER
+@@      Purpose: Return count of distinct jobs by category which player is on
+@@      Passed: %0 - trim(DBREF,#)
+@@      Return: A list with #,Category groups
+@@
+@@   SQL`COUNT_BY_TAG_PLAYER
+@@      Purpose: Return count of jobs by tag
+@@      Passed: %0 - trim(DBREF,#)
+@@      Return: A list with #,Tag groups
+@@
+@@    SQL`COUNT_BY_CATEGORY
+@@      Purpose: Return count of jobs by category
+@@      Passed: Nothing
+@@      Return: A list with #,Category Groups
+@@
+@@   SQL`COUNT_BY_TAG
+@@      Purpose: Return count of jobs by tag
+@@      Passed: Nothing
+@@      Return: A list with #,Tag groups
+@@
+@@   SQL`ID_EXISTS
+@@     Purpose: Check if ID exists
+@@     Passed: ID to Check
+@@     Returns: 0 for false, 1 for true
+@@
+@@   SQL`CHECK_CONTROL
+@@     Purpose: Check if player controls a job
+@@     Passed: %0 - dbref minus #, %1 - id
+@@     Returns: 0 for false, 1 for true
+@@     Definition of can control: ID exists and OPENED_BY is player AND Flag < 3
+
+&SQL`COUNT_BY_CATEGORY_PLAYER MuReq=SELECT Count(*),CATEGORY FROM JOBS_LIST WHERE COMMENTORS like '\%[sqlescape(%0)]\%' OR READERS like '\%[sqlescape(%0)]\%' OR OPENED_BY='[sqlescape(trim(%0,#))]' GROUP BY CATEGORY
+
+&SQL`COUNT_BY_CATEGORY MuReq=SELECT Count(*),CATEGORY FROM JOBS_LIST GROUP BY CATEGORY
+
+&SQL`COUNT_BY_TAG_PLAYER MuReq=SELECT Count(*),TAG FROM JOBS_TAGS t LEFT JOIN (SELECT ID FROM JOBS_LIST WHERE COMMENTORS like '\%[sqlescape(%0)]\%' OR READERS like '\%[sqlescape(%0)]\%' OR OPENED_BY='[sqlescape(trim(%0,#))]') x ON t.JOB_ID = x.ID GROUP BY t.TAG
+
+&SQL`COUNT_BY_TAG MuReq=SELECT Count(*),TAG FROM JOBS_TAGS GROUP BY TAG
+
+&SQL`ID_EXISTS MuReq=SELECT EXISTS(SELECT * FROM JOBS_LIST WHERE ID=[sqlescape(%0)])
+
+&SQL`CHECK_CONTROL MuReq=SELECT EXISTS(SELECT * FROM JOBS_LIST WHERE ID=[sqlescape(%1)] AND OPENED_BY='[sqlescape(%0)]' AND FLAGS<3)
+
+&SQL`CAN_WRITE MuReq=SELECT EXISTS(SELECT * FROM JOBS_LIST WHERE COMMENTORS like '\%[sqlescape(%0)]\%' OR OPENED_BY='[sqlescape(trim(%0,#))]' AND ID=[sqlescape(%1)])
+
+&SQL`CAN_VIEW MuReq=SELECT EXISTS(SELECT * FROM JOBS_LIST WHERE READERS like '\%[sqlescape(%0)]\%' OR OPENED_BY='[sqlescape(trim(%0,#))]' AND ID=[sqlescape(%1)])
+
+&SQL`SELECT_BY_CATEGORY MuReq=SELECT * FROM JOBS_LIST WHERE CATEGORY='[sqlescape(%0)]'
+
+&SQL`SELECT_BY_TAG MuReq=SELECT * FROM JOBS_LIST jl WHERE EXISTS (SELECT JOB_ID FROM JOBS_TAGS jt WHERE jt.TAG='[sqlescape(%0)]' AND jt.JOB_ID=jl.id)
+
+&SQL`SELECT_BY_OPENED_BY MuReq=SELECT * FROM JOBS_LIST WHERE OPENED_BY=[sqlescape(%0)]
+
+&SQL`SELECT_BY_KEYWORD MuReq=SELECT * FROM JOBS_LIST WHERE ID IN (SELECT ID FROM JOBS_LIST WHERE MATCH(TITLE,BODY) AGAINST ('[sqlescape(%0)]') UNION SELECT JOB_ID as ID FROM JOBS_COMMENTS WHERE MATCH(BODY) AGAINST ('[sqlescape(%0)]') ORDER BY ID)
+
+&SQL`CREATE_JOB MuReq=INSERT INTO JOBS_LIST (OPENED_ON,OPENED_BY,TITLE,BODY,READERS,COMMENTORS) VALUES ('[sqlescape(%0)]',[sqlescape(%1)],'[sqlescape(%2)]','[sqlescape(%3)]','','')
+
+&SQL`CREATE_JOB_EX MuReq=INSERT INTO JOBS_LIST (OPENED_ON,OPENED_BY,TITLE,BODY,CATEGORY,FLAGS,READERS,COMMENTORS) VALUES ('[sqlescape(%0)]',[sqlescape(%1)],'[sqlescape(%2)]','[sqlescape(%3)]','[sqlescape(%4)]',[sqlescape(%5)],'','')
+
+&SQL`CREATE_TAG MuReq=INSERT INTO JOBS_TAGS (JOB_ID,TAG) VALUES ([sqlescape(%0)],'[sqlescape(%1)]')
+
+&SQL`UPDATE_READERS MuReq=UPDATE JOBS_LIST SET READERS = concat(READERS,' [sqlescape(%1)]') WHERE ID=%0
+
+&SQL`UPDATE_COMMENTORS MuReq=UPDATE JOBS_LIST SET COMMENTORS = concat(COMMENTORS,' [sqlescape(%1)]') WHERE ID=%0
+
+&SQL`COMMENT_PART_OF_JOB MuReq=SELECT EXISTS(SELECT * FROM JOBS_COMMENTS WHERE JOB_ID=[sqlescape(%0)] AND ID=[sqlescape(%1)])
+
+&SQL`UPDATE_COMMENT_READERS MuReq=UPDATE JOBS_COMMENTS SET READERS = concat(READERS,' [sqlescape(%1)]') WHERE ID=%0
+
+&SQL`INSERT_COMMENT MuReq=INSERT INTO JOBS_COMMENTS (JOB_ID,POSTED_BY,POSTED_ON,FLAGS,BODY,READERS) VALUES ([sqlescape(%0)],[sqlescape(%1)],'[sqlescape(%2)]',[sqlescape(%3)],'[sqlescape(%4)]','')
+
+@@ FILTERS
+@@
+@@ FILTERS`JOB_ACCESS
+@@ Purpose: On players, filter the job list by if they exist as the opened_by or are in the commentors/readers.
+@@
+&FILTERS`JOB_ACCESS MuReq=[cor([match(extract(%0,1,1,~),*%#*)],[match(extract(%0,3,1,~),*%#*)],[match(extract(%0,10,1,~),*%#*)],[match(extract(%0,11,1,~),*%#*)])]
+
+&FILTERS`CAN_VIEW_COMMENTS MuReq=[cand(not(eq(extract(%0,5,1,~),5)),cor(not(t(extract(%0,6,1,~))),match(extract(%0,6,1,~),*%#*)))]

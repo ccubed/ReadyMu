@@ -1,0 +1,27 @@
+@@	Coded by: Gizmo AKA Ourea, Alzie, Oukranos
+@@	Email: ccubed.techno@gmail.com
+@@----------------------------------------------------------------------------
+@@	Purpose: ReadyMu Core. Handles Startups and global registration.
+@@----------------------------------------------------------------------------
+
+@create CORE
+@set CORE=wizard !no_c unfindable safe
+@lock/command CORE=flag^wizard
+
+@startup CORE=@dolist [lattr(me/GLOBALS`**)]=@function [after(##,`)]=%!/##;@dolist [xget(me,startups)]=@trigger ##/STARTUP
+
+&CMD`INFO CORE=$+info:@assert [gt(items(xget(me,INFO`SYSTEMS),|),0)]=@pemit %#=[ansi(hw,INFO:)]%bOnly core is installed.;@pemit %#=[center(%bSystems%b,width(%#),[ansi(hw,=)])]%R[table(Long Name|Short Name|DBRef,[sub([div(width(%#),3)],1)],[width(%#)],|)]%R[iter(xget(me,INFO`SYSTEMS),[table(%i0,[sub([div(width(%#),3)],1)],[width(%#)],|)],~,%R)]
+
+&GLOBALS`NSYS CORE=@switch %2=0,{[u(FUNCS`ADD_SYSTEM,%0|%1|%3)]},1,{[u(FUNCS`ADD_SYSTEM,%0|%1|%3)][attrib_set(me/startups,setunion(xget(me,startups),%3))]}
+
+&GLOBALS`RSYS CORE=@assert [setr(a,match(xget(me,INFO`SYSTEMS),*%0*,~))]=@pemit %#=[ansi(hw,INFO:)]%bCouldn't find a system by the name of %0.;[u(FUNCS`REM_SYSTEM,%qA)];@switch %1=1,{@dolist [mwho()]=@pemit ##=[ansi(hw,INFO:)][if(%2,%2,%bThe %0 system has been disabled by admin.)]}
+
+&GLOBALS`ISINSTALLED CORE=[setq(a,0)][iter(xget(me,INFO`SYSTEMS),[if(strmatch(%0,extract(%i0,2,1,|)),setq(a,1))],~)]%qA
+
+&FUNCS`ADD_SYSTEM CORE=[attrib_set(me/INFO`SYSTEMS,[setunion([xget(me,INFO`SYSTEMS)],%0,~)])]
+
+&FUNCS`REM_SYSTEM CORE=[attrib_set(me/INFO`SYSTEM,[ldelete(xget(me,INFO`SYSTEMS),%0,~,~)])]
+
+@dolist [lattr(CORE/GLOBALS`**)]=@function [after(##,`)]=[num(Core)]/##
+
+@pemit me=[ansi(hw,INFO:)]%bCore system setup.

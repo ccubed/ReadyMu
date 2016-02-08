@@ -1,0 +1,18 @@
+CREATE TABLE `Mu2`.`JOBS_LIST` (
+  `ID` INT NOT NULL AUTO_INCREMENT COMMENT 'ID of the job. AKA Job number.',
+  `OPENED_ON` DATETIME NOT NULL COMMENT 'Stores date job was opened',
+  `OPENED_BY` INT(10) NOT NULL COMMENT 'Dbref of the person who opened the job minus the #',
+  `ASSIGNED` INT(10) NULL COMMENT 'DBREF of the person assigned to a job minus the #',
+  `TITLE` VARCHAR(45) NOT NULL COMMENT 'Title of the job',
+  `BODY` LONGTEXT NOT NULL COMMENT 'Body text of the job',
+  `DUE` DATETIME NULL COMMENT 'A due date if set',
+  `CATEGORY` VARCHAR(45) NULL DEFAULT 'None' COMMENT 'Category of job.',
+  `FLAGS` INT(1) NOT NULL DEFAULT 0 COMMENT 'Flag Indicator',
+  `READERS` TINYTEXT NULL COMMENT 'List of Reader DBREFs without #',
+  `COMMENTORS` TINYTEXT NULL DEFAULT '' COMMENT 'List of Commentor DBREFs without #',
+  PRIMARY KEY (`ID`),
+  FULLTEXT (CATEGORY),
+  FULLTEXT (TITLE),
+  FULLTEXT (BODY),
+  FULLTEXT (READERS),
+  FULLTEXT (TITLE,BODY));

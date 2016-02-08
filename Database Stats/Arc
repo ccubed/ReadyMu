@@ -1,0 +1,68 @@
+@@	Coded by: Gizmo AKA Ourea, Alzie, Oukranos
+@@	Email: ccubed.techno@gmail.com
+@@----------------------------------------------------------------------------
+@@	Purpose: Mu2 Sheet system, attributes stored in the Database.
+@@  Largely based on my Universal CG and Sheet.
+@@----------------------------------------------------------------------------
+@@
+@@ Note: In order to use this, please set &VA on Arc to the name of your database.
+@@
+@@ Tables:
+@@   SHEET_<category>
+@@   SHEET_<category>_PLAYER
+@@
+@@ Makeup:
+@@   SHEET_<category>
+@@      ID - ID
+@@      Name - Name of thing
+@@      Levels - What Levels are Allowed
+@@      Prereqs - List of PreReqs
+@@
+@@   SHEET_<category>_PLAYER
+@@      PID - Player DBREF minus #
+@@      Level - Level they have
+@@      Name - Name of Thing (Not necessary, but saves time on sql)
+@@      Notes - Notes for Thing
+@@
+@@
+
+@create Arc
+
+@@ Command: +arc/define <things>. Purpose: In order for this to work, it needs to know what things exist in your system. You can define these individually or in one big list.
+@@ You can define these at any time. Nothing stops you from adding more later. This creates the necessary tables to track player data and what you define as acceptable stats for each category.
+&CMD`DEFINE Arc=$+arc/define *:@assert [hasflag(%#,W)];[sql(u(SQL`CREATE_MAIN_TABLE,%0))][sql(u(SQL`CREATE_PLAYER_TABLE,%0))];@pemit %#=[ansi(hw,Arc:)]%bCreated category %0 for sheets.
+
+@@ Command: +arc/add <category>=<thing>[/<levels>]. Add <thing> to <category>. If a space separated list of levels is provided that is stored too.
+&CMD`ADD Arc=$+arc/add *=*:@assert [orflags(%#,Wr)];@assert [t([sql(u(SQL`EXISTS,%0))])]=@pemit %#=[ansi(hw,Arc:)]%bThat doesn't seem to exist.;@switch [words(%1,/)]=1,{[sql(u(SQL`INSERT_NEW_STAT,%0,%1,0))];@pemit %#=[ansi(hw,ARC:)]%bAdded %1 to %0.},{[sql(u(SQL`INSERT_NEW_STAT,%0,before(%1,/),after(%1,/)))];@pemit %#=[ansi(hw,ARC:)]%bAdded [first(%1,/)] to %0 with acceptable levels of [last(%1,/)].}
+
+@@ Command: +arc/list <category>. List all the things in <category>.
+&CMD`LIST Arc=$+arc/list *:@assert [t([sql(u(SQL`EXISTS,%0))])]=@pemit %#=[ansi(hw,Arc:)]%bThat doesn't seem to exist.;[setq(A,[sql(SELECT NAME\,LEVELS FROM ARC_[sqlescape(%0)],:,~)])];@pemit %#=[header(%0)]%R[center([ansi(hw,I have the following %0)],78)]%R[ljust(ansi(nc,Name),39)][ljust(ansi(nc,Levels),39)];@dolist/inline/delimit : %qA=@pemit %#=[ljust(extract(%i0,1,1,~),39)][ljust(extract(%i0,2,1,~),39)];@pemit %#=[footer()]
+
+@@ Command: +arc/set <player>/<category>=<thing>:<level>[/<notes>]. Add <thing> from <category> to <player> at <level>. You can add an optional <notes>.
+&CMD`SET Arc=$+arc/set */*=*:@assert [orflags(%#,Wr)];@assert [pmatch(%0)]=@pemit %#=[ansi(hw,ARC:)]%bNo player match.;@assert [sql(u(SQL`EXISTS,%1))]=@pemit %#=[ansi(hw,ARC:)]%bThat category doesn't seem to exist.;@assert [t(setr(A,sql(SELECT * FROM ARC_[sqlescape(%1)] WHERE Name='[sqlescape(before(%2,:))]')))]=@pemit %#=[ansi(hw,ARC:)]%bThat stat doesn't seem to exist in the category.;[sql(u(SQL`ADD_PLAYER_STAT,%1,[pmatch(%0)],[before(after(%2,:),/)],[before(%2,:)],[if(t(after(after(%2,:),/)),after(after(%2,:),/),0)]))];@pemit %#=[ansi(hw,ARC:)]%bAdded [before(%2,:)] to %0 at [before(after(%2,:),/)].
+
+@@ Command: +arc/database <name>. In case you would prefer a command to set the database name.
+&CMD`DATABASE_NAME Arc=$+arc/database *:@assert [hasflag(%#,W)];[attrib_set(me/VA,%0)];@pemit %#=[ansi(hw,Arc:)]%bDatabase name set to %0. Please make sure this is correct.
+
+@@ Function: FN`LEVEL_ACCEPTABLE. Pass a category, thing, level. Returns 1 if level is acceptable, 0 otherwise. A 0 in levels in the database means any level works.
+@@ Set it to -1 to return 0 on all levels.
+@@ Input: %0 - Category, %1 - Thing, %2 - Level
+@@ Returns: 1 - acceptable, 0 - not acceptable, #-1 - Error
+&FN`LEVEL_ACCEPTABLE Arc=[setq(A,0)][if(sql(u(SQL`EXISTS,%0)),[setq(b,sql(SELECT LEVELS FROM ARC_[sqlescape(%0)] WHERE Name='[sqlescape(%1)]'))][if(cor(eq(%qB,0),match(%qB,%2)),[setq(A,1)],[setq(A,0)])],[setq(A,#-1)])]%qA
+
+@@ Function: FN`STAT_EXISTS. Pass a category, thing. Returns 1 if thing exists in category, 0 otherwise.
+&FN`STAT_EXISTS Arc=[setq(A,0)][if(sql(u(SQL`EXISTS,%0)),[setq(A,[sql(u(SQL`STAT_EXISTS,%0,%1))])],[setq(A,0)])]%qA
+
+@@ Sql Section
+
+&SQL`CREATE_MAIN_TABLE Arc=CREATE TABLE `%va`.`ARC_[sqlescape(%0)]`(`ID` INT NOT NULL AUTO_INCREMENT COMMENT 'ID',`NAME` TEXT NOT NULL,`LEVELS` TEXT NULL,`PREREQS` TEXT NULL,PRIMARY KEY(`ID`),FULLTEXT (NAME)) ENGINE='INNODB'
+
+&SQL`CREATE_PLAYER_TABLE Arc=CREATE TABLE `%va`.`ARC_[sqlescape(%0)]_PLAYER`(`PID` INT NOT NULL,`LEVEL` INT NOT NULL,`NAME` TEXT NOT NULL,`NOTES` TEXT NULL,FULLTEXT (NAME),FULLTEXT (NOTES)) ENGINE='INNODB'
+
+&SQL`EXISTS Arc=SHOW TABLES LIKE '\%[sqlescape(%0)]\%'
+
+&SQL`INSERT_NEW_STAT Arc=INSERT INTO ARC_[sqlescape(%0)] (Name,Levels) VALUES ('[sqlescape(%1)]','[sqlescape(%2)]')
+
+&SQL`ADD_PLAYER_STAT Arc=INSERT INTO ARC_[sqlescape(%0)]_PLAYER (PID,Level,Name,Notes) VALUES ([sqlescape(trim(%1,#))],[sqlescape(%2)],[sqlescape(%3)],'[sqlescape(%4)]',[if(%5,'[sqlescape(%5)]',NULL)])
+
+&SQL`STAT_EXISTS Arc=SELECT EXISTS(SELECT * FROM ARC_[sqlescape(%0)] WHERE Name='[sqlescape(%1)]')
