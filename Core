@@ -18,6 +18,14 @@
 
 &GLOBALS`ISINSTALLED CORE=[setq(a,0)][iter(xget(me,INFO`SYSTEMS),[if(strmatch(%0,extract(%i0,2,1,|)),setq(a,1))],~)]%qA
 
+&GLOBALS`GET_SETTING CORE=[xget(me,SETTING`[edit(%1,%b,_)])]
+
+&GLOBALS`HAS_SETTING CORE=[hasattr(me,SETTING`[edit(%1,%b,_)])]
+
+&GLOBALS`SET_SETTING CORE=[if(u(HAS_SETTING,%0),[attrib_set(me/SETTING`[edit(%1,%b,_)],%1)])]
+
+&GLOBALS`NEW_SETTING CORE=[if(u(ISINSTALLED,%0),[attrib_set(me/SETTING`[edit(%1,%b,_)],%2)])]
+
 &FUNCS`ADD_SYSTEM CORE=[attrib_set(me/INFO`SYSTEMS,[setunion([xget(me,INFO`SYSTEMS)],%0,~)])]
 
 &FUNCS`REM_SYSTEM CORE=[attrib_set(me/INFO`SYSTEM,[ldelete(xget(me,INFO`SYSTEMS),%0,~,~)])]

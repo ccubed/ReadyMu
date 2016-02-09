@@ -10,20 +10,18 @@
 
 @sql CREATE TABLE Identities(`DBREF` INT NOT NULL, `NAME` TINYTEXT NOT NULL, `STATUS` INT(1) NOT NULL DEFAULT 1);
 
-@@ List all your active Identities. If staff, list all active identities.
 &CMDS`IDENTITIES Identities=$+identities:
 
-@@ Staff: List identities for a player
 &CMDS`IDENTITIES_PLAYER Identities=$+identities *:
 
-@@ Ask for a new identity. If game allows alts, this is the command you use.
 &CMDS`NEW_IDENTITY Identities=$+identify *:
 
-@@ Declare your current Identity dead
 &CMDS`DEAD Identities=$+dead:
 
-@@ Switch Identity
 &CMDS`SWITCH Identities=$+identity *:
 
-@@ SQL for inserting Identities
-&SQL`INSERT_ID Identities=INSERT INTO
+&SQL`INSERT_ID Identities=INSERT INTO Identities (DBREF, NAME) VALUES ([sqlescape(%0)],[sqlescape(%1)])
+&SQL`ACTIVE_IDS Identities=SELECT * FROM Identities WHERE DBREF=[sqlescape(%0)] AND STATUS=1
+&SQL`ALL_IDS Identities=SELECT * FROM Identities WHERE DBREF=[sqlescape(%0)]
+&SQL`MAKE_DEAD Identities=UPDATE Identities SET STATUS=0 WHERE DBREF=[sqlescape(%0)] AND NAME="[sqlescape(%1)]"
+&SQL`CONFIRM_ID Identities=SELECT 1 FROM Identities WHERE DBREF=[sqlescape(%0)] AND NAME="[sqlescape(%1)]" AND STATUS=1
