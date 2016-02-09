@@ -28,7 +28,7 @@
 
 &FUNCS`ADD_SYSTEM CORE=[attrib_set(me/INFO`SYSTEMS,[setunion([xget(me,INFO`SYSTEMS)],%0,~)])]
 
-&FUNCS`REM_SYSTEM CORE=[attrib_set(me/INFO`SYSTEM,[ldelete(xget(me,INFO`SYSTEMS),%0,~,~)])]
+&FUNCS`REM_SYSTEM CORE=[attrib_set(me/INFO`SYSTEMS,[ldelete([xget(me,INFO`SYSTEMS)],%0,~,~)])]
 
 @dolist [lattr(CORE/GLOBALS`**)]=@function [after(##,`)]=[num(Core)]/##
 

@@ -8,20 +8,24 @@
 @set Identities=Wizard !no_c
 @power Identities=SQL_OK
 
+th [nsys(Identities System,ID,0,[num(Identities)])]
+
 @sql CREATE TABLE Identities(`DBREF` INT NOT NULL, `NAME` TINYTEXT NOT NULL, `STATUS` INT(1) NOT NULL DEFAULT 1);
 
 &CMDS`IDENTITIES Identities=$+identities:
 
 &CMDS`IDENTITIES_PLAYER Identities=$+identities *:
 
-&CMDS`NEW_IDENTITY Identities=$+identify *:
+&CMDS`NEW_IDENTITY Identities=$+identify *:@break [sql(u(SQL`COUNT,%0))]=@pemit %#=[ansi(hw,INFO:)]%bThat identity is already taken.;[sql(u(SQL`INSERT_ID,trim(%#,#),%0))];@pemit %#=[ansi(hw,INFO:)]%bYou registered %0 as your identity.
 
-&CMDS`DEAD Identities=$+dead:
+&CMDS`DEAD Identities=$+dead:@assert [hasattrval(%#,CURID)]=@pemit %#=[ansi(hw,INFO:)]%bYou either don't have an active Identity or need to select one with switch.;@switch [sql(u(SQL`ACTIVE_IDS_COUNT,trim(%#,#)))]=1,{[sql(u(SQL`MAKE_DEAD,trim(%#,#),xget(%#,CURID)))];@pemit %#=[ansi(hw,INFO:)]%bMarked your current Identity as dead. That was your only Identity. Please make a new one.},{[sql(u(SQL`MAKE_DEAD,trim(%#,#),xget(%#,CURID)))][attrib_set(%#/CURID,[setr(a,[sql(SELECT NAME FROM Identities WHERE DBREF=[sqlescape(trim(%#,#))] AND STATUS=1 LIMIT 1)])])];@pemit %#=[ansi(hw,INFO:)]%bMade your current Identity dead. Set your current Identity to %qA. You can change it if you want another one.}
 
-&CMDS`SWITCH Identities=$+identity *:
+&CMDS`SWITCH Identities=$+identity *:@assert [sql(u(SQL`CONFIRM_ID,trim(%#,#),%0))]=@pemit %#=[ansi(hw,INFO:)]%bThat doesn't appear to be an Identity you own.;[attrib_set(%#/CURID,[capstr(%0)])];@pemit %#=[ansi(hw,INFO:)]%bSet your Identity to [capstr(%0)].
 
 &SQL`INSERT_ID Identities=INSERT INTO Identities (DBREF, NAME) VALUES ([sqlescape(%0)],[sqlescape(%1)])
 &SQL`ACTIVE_IDS Identities=SELECT * FROM Identities WHERE DBREF=[sqlescape(%0)] AND STATUS=1
+&SQL`ACTIVE_IDS_COUNT Identities=SELECT COUNT(*) FROM Identities WHERE DBREF=[sqlescape(%0)] AND STATUS=1
 &SQL`ALL_IDS Identities=SELECT * FROM Identities WHERE DBREF=[sqlescape(%0)]
 &SQL`MAKE_DEAD Identities=UPDATE Identities SET STATUS=0 WHERE DBREF=[sqlescape(%0)] AND NAME="[sqlescape(%1)]"
 &SQL`CONFIRM_ID Identities=SELECT 1 FROM Identities WHERE DBREF=[sqlescape(%0)] AND NAME="[sqlescape(%1)]" AND STATUS=1
+&SQL`COUNT Identities=SELECT COUNT(*) FROM Identities WHERE NAME="[sqlescape(%0)]" AND STATUS=1
